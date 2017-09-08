@@ -1,0 +1,898 @@
+<!DOCTYPE html>
+<html >
+<head>
+    <meta charset="UTF-8">
+    <title>最小生成树 (Prim&#39;s, Kruskal&#39;s)</title>
+    <link rel="stylesheet" type="text/css" href="stylesheet.css">
+    <link rel="stylesheet" type="text/css" href="common.css">
+    <link rel="stylesheet" href="viz-1.0.1.css">
+    <link rel="stylesheet" href="visual.css">
+    <link rel="stylesheet" href="drawgraph.css">
+    <style>
+        .execAction { padding: 5px 8px; }
+        .err { padding: 5px 0px; }
+        #actions-extras input {
+            width: 35px;
+            padding: 5px 8px 7px;
+        }
+
+        .draw { bottom: 173px; }
+        .random { bottom: 146px; }
+        .examples { bottom: 119px; }
+        .kruskals { bottom: 92px; }
+        .prims { bottom: 65px; }
+    </style>
+
+</head>
+<div id="dark-overlay"></div>
+
+<div id="status" class="panel"><p></p></div>
+<div id="status-hide" class="panel-hide"><img src="https://visualgo.net/img/arrow_white_right.png" alt=">" title="show/hide status panel"/></div>
+
+<div id="media-controls">
+
+    <span id="pause" class="media-control-button" title="pause" onclick=pause()><img src="https://visualgo.net/img/pause.png" alt="pause"></span>
+    <span id="play" class="media-control-button" title="play" onclick=play()><img src="https://visualgo.net/img/play.png" alt="play"></span>
+</div>
+
+<div id='viz'></div>
+<div id='current-action' class='panel'></div>
+
+<div id="overlay" hidden></div>
+<div id="dropdown-temp-holder" hidden></div>
+<div id="popup" hidden>
+    <div id="popup-content"></div>
+    <span id="hide-popup" hidden>X <u>Close</u></span>
+</div>
+
+<div id="actions" class="panel">
+    <p id="draw" onclick=drawGraph()>绘制图表</p>
+    <p id="examples" class="execAction">图示</p>
+    <p id="kruskals" class="execAction" onclick="kruskals()">Kruskal&#39;s Algorithm</p>
+    <p id="prims" class="execAction">Prim&#39;s Algorithm(s)</p>
+</div>
+<div id="actions-hide" class="panel-hide"><img src="arrow_white_right.png" alt=">" title="显示/隐藏 动作面板"/></div>
+<div id="actions-extras">
+    <div class="draw action-menu-pullout">
+        <div id="draw-err" class="err"></div>
+    </div>
+    <div class="examples action-menu-pullout">
+        <div id="example1" class="execAction new-menu-option coloured-menu-option" onclick="example(CP3_4_10)"><p>CP 4.10</p></div>
+        <div id="example2" class="execAction new-menu-option coloured-menu-option" onclick="example(CP3_4_14)"><p>CP 4.14</p></div>
+        <div id="example3" class="execAction new-menu-option coloured-menu-option" onclick="example(K5)"><p>K5</p></div>
+        <div id="example4" class="execAction new-menu-option coloured-menu-option" onclick="example(RAIL)"><p>Rail</p></div>
+        <div id="example5" class="execAction new-menu-option coloured-menu-option" onclick="example(TESSELLATION)"><p>Tessellation</p></div>
+    </div>
+    <div class="kruskals action-menu-pullout">
+        <div id="kruskals-err" class="err"></div>
+    </div>
+    <div class="prims action-menu-pullout">
+        <div id="prims-input" class="new-menu-option">s = <input type="number" id="prim-v" title="输入源顶点" autocomplete="off" min=0 max=99 value=0></div>
+        <div id="prims-go" class="execAction coloured-menu-option" onclick=prims()><p>执行</p></div>
+        <div id="prims-err" class="err"></div>
+    </div>
+</div>
+
+<div id="drawgraph" class="overlays"></div>
+
+<div id="bottom-bar">
+
+</div>
+<script src="https://code.jquery.com/jquery-3.1.1.min.js"></script>
+
+
+<script type="text/javascript">
+    var PHP_DOMAIN = "";
+
+    // surprise colour!
+    // Referenced to in  home.js and viz.js also
+    var colourArray = ["#52bc69", "#d65775"/*"#ed5a7d"*/, "#2ebbd1", "#d9513c", "#fec515", "#4b65ba", "#ff8a27", "#a7d41e"]; // green, pink, blue, red, yellow, indigo, orange, lime
+
+    function disableScroll() { $('html').css('overflow', 'hidden'); }
+
+    function enableScroll() { $('html').css('overflow', 'visible'); }
+
+    function replaceAll(find, replace, str) { return str.replace(new RegExp(find, 'g'), replace); }
+
+    function getColours() {
+        var generatedColours = new Array();
+        while (generatedColours.length < 4) {
+            var n = (Math.floor(Math.random() * colourArray.length));
+            if ($.inArray(n, generatedColours) == -1)
+                generatedColours.push(n);
+        }
+        return generatedColours;
+    }
+
+    function isOn(value, position) {
+        return (value>>position) & 1 === 1;
+    }
+
+    function customAlert(msg) {
+        $('#custom-alert p').html(msg);
+        var m = -1 * ($('#custom-alert').outerHeight()/2);
+        $('#custom-alert').css('margin-top', m+'px');
+        $('#dark-overlay').fadeIn(function() {
+            $('#custom-alert').fadeIn(function() {
+                setTimeout(function() {
+                    $('#custom-alert').fadeOut(function() {
+                        $('#dark-overlay').fadeOut();
+                    });
+                }, 1000);
+            });
+        });
+    }
+
+    function showLoadingScreen() {
+        $('#loading-overlay').show();
+        $('#loading-message').show();
+    }
+
+    function hideLoadingScreen() {
+        $('#loading-overlay').hide();
+    }
+
+    function commonAction(retval, msg) {
+        //setTimeout(function() {
+        if (retval) { // mode == "exploration" && // now not only for exploration mode, but check if this opens other problems
+            $('#current-action').show();
+            $('#current-action').html(mode == "exploration" ? msg : ("e-Lecture Example (auto play until done)<br>" + msg));
+            $('#progress-bar').slider("option", "max", gw.getTotalIteration()-1);
+            triggerRightPanels();
+            isPlaying = true;
+        }
+        //}, 500);
+    }
+
+    function getQueryVariable(variable) {
+        var query = window.location.search.substring(1);
+        var vars = query.split('&');
+        for (var i = 0; i < vars.length; i++) {
+            var pair = vars[i].split('=');
+            if (decodeURIComponent(pair[0]) == variable)
+                return decodeURIComponent(pair[1]);
+        }
+        return "";
+    }
+
+    var generatedColours = getColours();
+    var surpriseColour = colourArray[generatedColours[0]];
+    var colourTheSecond = colourArray[generatedColours[1]];
+    var colourTheThird = colourArray[generatedColours[2]];
+    var colourTheFourth = colourArray[generatedColours[3]];
+
+    $(function() {
+        $('.links').css('background', surpriseColour);
+        $('.right-links').css('background', surpriseColour);
+        $('#login-go').css('background', surpriseColour);
+
+        $('.colour').css("color", surpriseColour); // name
+        $('h4').css("background-color", surpriseColour); // about, contact us etc. button background
+
+        // title
+        $('#title a').click(function() {
+            $('#title a').removeClass('selected-viz');
+            $(this).addClass('selected-viz');
+            // temporary quick fix for Google Chrome Aug 2016 issue...
+            setTimeout(function(){ document.body.style.zoom = "100.1%"; }, 100); // force resize/redraw...
+            setTimeout(function(){ document.body.style.zoom = "100%"; }, 600);
+        });
+
+        // overlays stuffs
+
+        $('.close-overlay').click(function() {
+            $('.overlays').fadeOut(function() {
+                $('#dark-overlay').fadeOut();
+            });
+        });
+
+        $('#dark-overlay').click(function() {
+            $('.overlays').fadeOut();
+            $('#dark-overlay').fadeOut();
+        });
+
+    });
+
+
+</script>
+<script type="text/javascript" src="jquery-ui.min.js" ></script>
+
+<script type="text/javascript" src="d3.min.js"></script>
+<script type="text/javascript" src="viz-1.0.3.js"></script>
+<script type="text/javascript" src="graph_library-1.0.2.min.js"></script>
+
+<script> // Implement these functions in each visualisation
+// This function will be called before entering e-Lecture Mode
+function ENTER_LECTURE_MODE() {}
+
+// This function will be called before returning to Explore Mode
+function ENTER_EXPLORE_MODE() {}
+
+// Lecture action functions
+function CUSTOM_ACTION(action, data, mode) {}
+</script>
+
+<script type="text/javascript">
+    // MST Widget
+    // original author: Ivan Reinaldo, then maintained by Steven Halim
+
+    var MST = function() {
+        var self = this;
+        var gw = new GraphWidget();
+
+        var iVL = {};
+        var iEL = {};
+        var iAL = {}; // special, for Prim's
+        var amountVertex = 0;
+        var amountEdge = 0;
+
+        this.getGraphWidget = function() { return gw; }
+
+        fixJSON = function() {
+            amountVertex = 0;
+            amountEdge = 0;
+            for (var key in iVL) amountVertex++;
+            for (var key in iEL) amountEdge++;
+
+            var sortedArray = [];
+            for (key in iEL) {
+                sortedArray.push(new ObjectTriple(parseInt(iEL[key]["w"]), parseInt(iEL[key]["u"]), parseInt(iEL[key]["v"])));
+            }
+            sortedArray.sort(ObjectTriple.compare); // sort by increasing w, and if ties, by increasing u, and if still ties, by increasing v
+
+            for (var i = 0; i < sortedArray.length; i++) { // rearrange the keys in iEL based on our custom sort order
+                iEL[i]["w"] = sortedArray[i].getFirst();
+                iEL[i]["u"] = sortedArray[i].getSecond();
+                iEL[i]["v"] = sortedArray[i].getThird();
+            }
+
+            for (var key in iVL) iAL[key] = Array();
+            for (var key in iEL) { // transform EL to AL (for Prim's)
+                iAL[iEL[key]["u"]].push(new ObjectTriple(iEL[key]["v"], iEL[key]["w"], key));
+                iAL[iEL[key]["v"]].push(new ObjectTriple(iEL[key]["u"], iEL[key]["w"], key)); // bidirectional
+            }
+        }
+
+        takeJSON = function(graph) {
+            if (graph == null) return;
+            graph = JSON.parse(graph);
+            iVL = graph["vl"];
+            iEL = graph["el"];
+            fixJSON();
+        }
+
+        statusChecking = function() {
+            $("#draw-status p").html("Draw a <b>connected undirected weighted</b> graph, preferably <b>V > 7</b>, <b>minimize edge crossing</b>, and make it <b>challenging for Prim&#39;s/Kruskal&#39;s algorithm</b>");
+        }
+
+        warnChecking = function() {
+            var warn = "";
+            if (amountVertex >= 17) warn += "Too much vertex on screen, consider drawing smaller graph. ";
+            if (warn == "") $("#draw-warn p").html("No Warning");
+            else            $("#draw-warn p").html(warn);
+        }
+
+        errorChecking = function() {
+            var error = "";
+            if (amountVertex == 0) {
+                $("#draw-err p").html("Graph cannot be empty. ");
+                return;
+            }
+
+            if (amountVertex == 1) {
+                $("#draw-err p").html("Graph must contain at least one edge. ");
+                return;
+            }
+
+            var visited = [];
+            var stack = [];
+            stack.push(0);
+            visited[0] = true;
+            while (stack.length > 0) {
+                var now = stack.pop();
+                for (var key2 in iEL) {
+                    if (iEL[key2]["u"] == now && !visited[iEL[key2]["v"]]) {
+                        visited[iEL[key2]["v"]] = true;
+                        stack.push(+iEL[key2]["v"]);
+                    }
+                    if (iEL[key2]["v"] == now && !visited[iEL[key2]["u"]]) {
+                        visited[iEL[key2]["u"]] = true;
+                        stack.push(+iEL[key2]["u"]);
+                    }
+                }
+            }
+
+            for (var i = 0; i < amountVertex; i++)
+                if (!visited[i]) {
+                    error = error + "Vertex 0 and vertex {i} is not connected. ".replace("{i}", i);
+                    break;
+                }
+
+            if (error == "") $("#draw-err p").html("Graph must contain at least one edge. ");
+            else             $("#draw-err p").html(error);
+        }
+
+        var intervalID;
+
+        this.startLoop = function() {
+            intervalID = setInterval(function() {
+                takeJSON(JSONresult);
+                warnChecking();
+                errorChecking();
+                statusChecking();
+            }, 100);
+        }
+
+        this.stopLoop = function() {
+            clearInterval(intervalID);
+        }
+
+        this.draw = function() {
+            if ($("#draw-err p").html() != "Graph must contain at least one edge. ")
+                return false;
+            if ($("#submit").is(':checked'))
+                this.submit(JSONresult);
+            if ($("#copy").is(':checked'))
+                window.prompt("Copy to clipboard:", JSONresult);
+
+            fixJSON(); // to re-sort the edges
+
+            graph = createState(iVL, iEL);
+            gw.updateGraph(graph, 500);
+            return true;
+        }
+
+        this.importjson = function(text) {
+            takeJSON(text);
+            statusChecking();
+            graph = createState(iVL, iEL);
+            gw.updateGraph(graph, 500);
+        }
+
+
+
+        this.getGraph = function() {
+            return {
+                'vl': iVL,
+                'el': iEL
+            };
+        }
+
+        this.getV = function() {
+            return amountVertex;
+        }
+
+        this.kruskal = function(callback) {
+            var i, key, totalWeight = 0, cs;
+            var stateList = [], sortedArray = [];
+            var vertexHighlighted = {}, edgeHighlighted = {}, vertexTraversed = {}, edgeTraversed = {}, edgeQueued = {};
+            var tempUfds = new UfdsHelper();
+
+            if (amountVertex == 0) { // error check, no graph (maybe via empty JSON or faulty db)
+                $('#kruskals-err').html("没有图表运行此项。请首先选择图表。.");
+                return false;
+            }
+
+            for (key in iVL) tempUfds.insert(key);
+
+            for (key in iEL) {
+                edgeQueued[key] = true;
+                sortedArray.push(new ObjectPair(parseInt(iEL[key]["w"]), parseInt(key)));
+            }
+            sortedArray.sort(ObjectPair.compare);
+
+            function sortedArrayToString() {
+                var ansStr = "";
+                var maxLength = Math.min(sortedArray.length, 9);
+                for (var i = 0; i < maxLength; i++) {
+                    var thisEdgeId = sortedArray[i].getSecond();
+                    ansStr += "(" + iEL[thisEdgeId]["w"] + ",(" + iEL[thisEdgeId]["u"] + "," + iEL[thisEdgeId]["v"] + "))";
+                    if (i < (maxLength-1)) ansStr += ", ";
+                }
+                if (sortedArray.length > 10) ansStr += " ...";
+                return ansStr;
+            }
+
+            cs = createState(iVL, iEL);
+            cs["status"] = "Edges are sorted in increasing order of weight: " + sortedArrayToString() + ".";
+            cs["lineNo"] = [1, 2];
+            stateList.push(cs);
+
+            numTaken = 0;
+            while (sortedArray.length > 0) {
+                cs = createState(iVL, iEL, vertexHighlighted, edgeHighlighted, vertexTraversed, edgeTraversed, edgeQueued);
+                cs["status"] = "The remaining edge(s) is/are " + sortedArrayToString() + ".";
+                cs["lineNo"] = 3;
+                stateList.push(cs);
+
+                var dequeuedEdge = sortedArray.shift();
+                var dequeuedEdgeId = dequeuedEdge.getSecond();
+                var u = iEL[dequeuedEdgeId]["u"], v = iEL[dequeuedEdgeId]["v"], w = parseInt(iEL[dequeuedEdgeId]["w"]);
+
+                edgeHighlighted[dequeuedEdgeId] = true;
+                vertexHighlighted[u] = true;
+                vertexHighlighted[v] = true;
+
+                cs = createState(iVL, iEL, vertexHighlighted, edgeHighlighted, vertexTraversed, edgeTraversed, edgeQueued);
+                cs["status"] = "Checking if a cycle will appear if we add this edge: (" + w + ",(" + u + "," + v + ")).";
+                cs["lineNo"] = 4;
+                stateList.push(cs);
+
+                var noCycle = false;
+                if (!tempUfds.isSameSet(u, v)) {
+                    noCycle = true;
+                    tempUfds.unionSet(u, v);
+                    edgeTraversed[dequeuedEdgeId] = true;
+                    vertexTraversed[u] = true;
+                    vertexTraversed[v] = true;
+                    totalWeight += w;
+                }
+
+                delete edgeHighlighted[dequeuedEdgeId];
+                delete edgeQueued[dequeuedEdgeId]
+                delete vertexHighlighted[u];
+                delete vertexHighlighted[v];
+
+                cs = createState(iVL, iEL, vertexHighlighted, edgeHighlighted, vertexTraversed, edgeTraversed, edgeQueued);
+                if (noCycle) {
+                    cs["status"] = "Adding that edge will not form a cycle, so we add it to T. The current weight of T is " + totalWeight + ".";
+                    cs["lineNo"] = 5;
+                    numTaken++;
+                }
+                else {
+                    cs["status"] = " that edge will form a cycle, so we ignore it. The current weight of T remains at " + totalWeight + ".";
+                    cs["lineNo"] = 6;
+                }
+                stateList.push(cs);
+
+                if (noCycle && (numTaken == amountVertex-1)) {
+                    cs = createState(iVL, iEL, vertexHighlighted, edgeHighlighted, vertexTraversed, edgeTraversed, edgeQueued);
+                    cs["status"] = (amountVertex-1) + " edges have been taken by Kruskal&#39;s, so the MST has been found.<br>An optimized version of Kruskal&#39;s algorithm can stop here."; // the animation will still run until the end
+                    cs["lineNo"] = 5;
+                    stateList.push(cs);
+                }
+            }
+
+            cs = createState(iVL, iEL, vertexHighlighted, edgeHighlighted, vertexTraversed, edgeTraversed, edgeQueued);
+            cs["status"] = "The highlighted vertices and edges form an MST with weight = " + totalWeight + ".<br><b><a href=\"https://cpbook.net/#downloads\" target=\"_blank\">ch4_03_kruskal_prim.cpp/java, ch4.zip, CP3</a></b>.";
+            cs["lineNo"] = 7;
+            stateList.push(cs);
+
+            populatePseudocode(1);
+            gw.startAnimation(stateList, callback);
+            return true;
+        }
+
+        this.prim = function(sourceVertex, callback) {
+            var i, key, totalWeight = 0, cs;
+            var visited = {}, vertexHighlighted = {}, edgeHighlighted = {}, vertexTraversed = {}, edgeTraversed = {}, edgeQueued = {};
+            var stateList = [];
+
+            // error checks
+            if (amountVertex == 0) { // no graph
+                $('#prims-err').html("没有图表运行此项。请首先选择图表。.");
+                return false;
+            }
+
+            if (sourceVertex >= amountVertex || sourceVertex < 0) { // start vertex not in range
+                $('#prims-err').html("This vertex does not exist in the graph");
+                return false;
+            }
+
+            for (key in iVL) visited[key] = false;
+            vertexTraversed[sourceVertex] = true;
+            for (var key in iVL) iVL[key]["extratext"] = "";
+            iVL[sourceVertex]["extratext"] = "source";
+            cs = createState(iVL, iEL, vertexHighlighted, edgeHighlighted, vertexTraversed, edgeTraversed, edgeQueued);
+            cs["status"] = "T = {" + sourceVertex + "}.";
+            cs["lineNo"] = 1;
+            stateList.push(cs);
+
+            delete vertexHighlighted[sourceVertex];
+            vertexTraversed[sourceVertex] = true;
+
+            var sortedArray = [];
+            var enqueuedToString = "";
+
+            function sortedArrayToString() {
+                var ansStr = "";
+                var maxLength = Math.min(sortedArray.length, 6);
+                for (var i = 0; i < maxLength; i++) {
+                    var thisTriple = sortedArray[i];
+                    ansStr += "(" + thisTriple.getFirst() + "," + thisTriple.getSecond() + ")";
+                    if (i < (maxLength-1)) ansStr += ", ";
+                }
+                if (sortedArray.length > 6) ansStr += "..";
+                if (ansStr == "") ansStr = "empty";
+                return ansStr;
+            }
+
+            function process(vtx) {
+                enqueuedToString = "";
+                visited[vtx] = true;
+                for (key in iAL[vtx]) {
+                    var v = iAL[vtx][key].getFirst();
+                    var w = iAL[vtx][key].getSecond();
+                    var enqueuedEdgeId = iAL[vtx][key].getThird();
+                    if (!visited[v]) {
+                        enqueuedEdge = new ObjectTriple(parseInt(w), parseInt(v), parseInt(enqueuedEdgeId));
+                        edgeQueued[enqueuedEdgeId] = true;
+                        enqueuedToString += "(" + w + "," + v + "), ";
+                        sortedArray.push(enqueuedEdge);
+                    }
+                }
+                enqueuedToString = enqueuedToString.substring(0, enqueuedToString.length-2);
+                sortedArray.sort(ObjectTriple.compare);
+            }
+
+            process(sourceVertex);
+
+            cs = createState(iVL, iEL, vertexHighlighted, edgeHighlighted, vertexTraversed, edgeTraversed, edgeQueued);
+            cs["status"] = enqueuedToString + " is added to the PQ.<br>The PQ is now " + sortedArrayToString() + ".";
+            cs["lineNo"] = 2;
+            stateList.push(cs);
+
+            var numTaken = 1;
+            while (sortedArray.length > 0) {
+                var dequeuedEdge = sortedArray.shift();
+                var otherVertex = dequeuedEdge.getSecond();
+                var edgeId = dequeuedEdge.getThird();
+
+                vertexHighlighted[otherVertex] = true;
+                edgeHighlighted[edgeId] = true;
+                cs = createState(iVL, iEL, vertexHighlighted, edgeHighlighted, vertexTraversed, edgeTraversed, edgeQueued);
+                cs["status"] = "(" + dequeuedEdge.getFirst() + "," + otherVertex + ") is removed from PQ. Check if vertex " + otherVertex + " is in T.<br>The PQ is now " + sortedArrayToString() + ".";
+                cs["lineNo"] = 4;
+                stateList.push(cs);
+
+                if (!visited[otherVertex]) {
+                    delete edgeHighlighted[edgeId];
+                    edgeHighlighted[edgeId] = true;
+                    vertexHighlighted[otherVertex] = true;
+
+                    cs = createState(iVL, iEL, vertexHighlighted, edgeHighlighted, vertexTraversed, edgeTraversed, edgeQueued);
+                    cs["status"] = otherVertex + " is not in T.";
+                    cs["lineNo"] = 4;
+                    stateList.push(cs);
+
+                    delete vertexHighlighted[otherVertex];
+                    delete edgeHighlighted[edgeId];
+                    edgeTraversed[edgeId] = true;
+                    vertexTraversed[otherVertex] = true;
+
+                    process(otherVertex);
+
+                    totalWeight += parseInt(dequeuedEdge.getFirst());
+                    cs = createState(iVL, iEL, vertexHighlighted, edgeHighlighted, vertexTraversed, edgeTraversed, edgeQueued);
+                    cs["status"] = otherVertex + " and this edge are added into T (T\\&#39;s weight = " + totalWeight + "), " + (enqueuedToString.length > 0 ? enqueuedToString : "(null)") + " is also added to PQ. The PQ is now " + sortedArrayToString() + ".";
+                    cs["lineNo"] = 5;
+                    stateList.push(cs);
+
+                    numTaken++;
+                    if (numTaken == amountVertex) { // to show that we can optimize Prim's a bit.
+                        cs = createState(iVL, iEL, vertexHighlighted, edgeHighlighted, vertexTraversed, edgeTraversed, edgeQueued);
+                        cs["status"] = numTaken + " vertices have been taken by Prim\\&#39;s, so the MST has been found.<br>An optimized version of Prim\\&#39;s algorithm can stop here."; // For now, we will continue until the PQ is empty
+                        cs["lineNo"] = 5;
+                        stateList.push(cs);
+                    }
+                }
+                else {
+                    delete edgeQueued[edgeId];
+                    delete edgeHighlighted[edgeId];
+
+                    cs = createState(iVL, iEL, vertexHighlighted, edgeHighlighted, vertexTraversed, edgeTraversed, edgeQueued);
+                    cs["status"] = otherVertex + " is in T, so ignore this edge.";
+                    cs["lineNo"] = 6;
+                    stateList.push(cs);
+                }
+            }
+
+            cs = createState(iVL, iEL, vertexHighlighted, edgeHighlighted, vertexTraversed, edgeTraversed, edgeQueued);
+            cs["status"] = "The highlighted vertices and edges form an MST with weight = " + totalWeight + '.<br><b><a href="https://cpbook.net/#downloads" target="_blank">ch4_03_kruskal_prim.cpp/java, ch4.zip, CP3.</a></b>';
+            cs["lineNo"] = 7;
+            stateList.push(cs);
+
+            populatePseudocode(0);
+            gw.startAnimation(stateList, callback);
+            return true;
+        }
+
+        this.examples = function(id) {
+            var vertexList = getExampleGraph(id, VL);
+            var edgeList = getExampleGraph(id, EL);
+            this.loadGraph(vertexList, edgeList);
+            return true;
+        }
+
+        this.loadGraph = function(vertexList, edgeList) {
+            iVL = vertexList;
+            iEL = edgeList;
+            fixJSON();
+            var newState = createState(iVL, iEL);
+            gw.updateGraph(newState, 500);
+        }
+
+        function createState(iVLObject, iELObject, vertexHighlighted, edgeHighlighted, vertexTraversed, edgeTraversed, edgeQueued) {
+            var isDefaultGrey = true;
+            if ((vertexHighlighted == null) && (edgeHighlighted == null) && (vertexTraversed == null) && (edgeTraversed == null) && (edgeQueued == null))
+                isDefaultGrey = false;
+            if (vertexHighlighted == null) vertexHighlighted = {};
+            if (edgeHighlighted == null) edgeHighlighted = {};
+            if (vertexTraversed == null) vertexTraversed = {};
+            if (edgeTraversed == null) edgeTraversed = {};
+            if (edgeQueued == null) edgeQueued = {};
+
+            var key;
+            var state = {
+                "vl": {},
+                "el": {}
+            };
+
+            if (isDefaultGrey) {
+                for (key in iVLObject) {
+                    state["vl"][key] = {};
+                    state["vl"][key]["cx"] = iVLObject[key]["x"];
+                    state["vl"][key]["cy"] = iVLObject[key]["y"];
+                    state["vl"][key]["text"] = key;
+                    state["vl"][key]["state"] = VERTEX_GREY_OUTLINE;
+                    state["vl"][key]["extratext"] = iVLObject[key]["extratext"];
+                }
+                for (key in iELObject) {
+                    state["el"][key] = {};
+                    state["el"][key]["vertexA"] = iELObject[key]["u"];
+                    state["el"][key]["vertexB"] = iELObject[key]["v"];
+                    state["el"][key]["type"] = EDGE_TYPE_UDE;
+                    state["el"][key]["weight"] = iELObject[key]["w"];
+                    state["el"][key]["state"] = EDGE_GREY;
+                    state["el"][key]["displayWeight"] = true;
+                    state["el"][key]["animateHighlighted"] = false;
+                }
+            }
+            else {
+                for (key in iVLObject) {
+                    state["vl"][key] = {};
+                    state["vl"][key]["cx"] = iVLObject[key]["x"];
+                    state["vl"][key]["cy"] = iVLObject[key]["y"];
+                    state["vl"][key]["text"] = key;
+                    state["vl"][key]["state"] = VERTEX_DEFAULT;
+                    state["vl"][key]["extratext"] = iVLObject[key]["extratext"];
+                }
+                for (key in iELObject) {
+                    state["el"][key] = {};
+                    state["el"][key]["vertexA"] = iELObject[key]["u"];
+                    state["el"][key]["vertexB"] = iELObject[key]["v"];
+                    state["el"][key]["type"] = EDGE_TYPE_UDE;
+                    state["el"][key]["weight"] = iELObject[key]["w"];
+                    state["el"][key]["state"] = EDGE_DEFAULT;
+                    state["el"][key]["displayWeight"] = true;
+                    state["el"][key]["animateHighlighted"] = false;
+                }
+            }
+
+            for (key in edgeQueued) {
+                key1 = state["el"][key]["vertexA"];
+                key2 = state["el"][key]["vertexB"]
+                state["vl"][key1]["state"] = VERTEX_DEFAULT;
+                state["vl"][key2]["state"] = VERTEX_DEFAULT;
+                state["el"][key]["state"] = EDGE_DEFAULT;
+            }
+
+            for (key in vertexHighlighted) state["vl"][key]["state"] = VERTEX_HIGHLIGHTED; // VERTEX_BLUE_FILL;
+            for (key in edgeHighlighted) state["el"][key]["state"] = EDGE_HIGHLIGHTED; // EDGE_BLUE;
+            for (key in vertexTraversed) state["vl"][key]["state"] = VERTEX_TRAVERSED; // VERTEX_GREEN_FILL;
+            for (key in edgeTraversed) state["el"][key]["state"] = EDGE_TRAVERSED; // EDGE_GREEN;
+
+            return state;
+        }
+
+        function populatePseudocode(act) {
+            switch (act) {
+                case 0: // Prim's
+                    $('#code1').html('T = {s}');
+                    $('#code2').html("enqueue edges connected to s in PQ (by inc weight)");
+                    $('#code3').html('while (!PQ.isEmpty)');
+                    $('#code4').html('&nbsp;&nbsp;if (vertex v linked with e = PQ.remove &notin; T)');
+                    $('#code5').html("&nbsp;&nbsp;&nbsp;&nbsp;T = T &cup; {v, e}, enqueue edges connected to v");
+                    $('#code6').html("&nbsp;&nbsp;else ignore e");
+                    $('#code7').html('MST = T // <b><a href="https://cpbook.net/#downloads" target="_blank">ch4_03_kruskal_prim.cpp/java, ch4, CP3</a></b>');
+                    break;
+                case 1: // Kruskal's
+                    $('#code1').html("Sort E edges by increasing weight");
+                    $('#code2').html('T = {}');
+                    $('#code3').html('for (i = 0; i &lt; edgeList.length; i++)');
+                    $('#code4').html("&nbsp;&nbsp;if adding e = edgelist[i] does not form a cycle");
+                    $('#code5').html("&nbsp;&nbsp;&nbsp;&nbsp;add e to T");
+                    $('#code6').html("&nbsp;&nbsp;else ignore e");
+                    $('#code7').html('MST = T // <b><a href="https://cpbook.net/#downloads" target="_blank">ch4_03_kruskal_prim.cpp/java, ch4, CP3</a></b>');
+                    break;
+            }
+        }
+    }
+
+
+
+    // MST Actions
+    var actionsWidth = 150;
+    var statusCodetraceWidth = 430;
+
+    var isExamplesOpen = false, isPrimsOpen = false;
+
+    function openExamples() {
+        if (!isExamplesOpen) {
+            $('.examples').fadeIn('fast');
+            isExamplesOpen = true;
+        }
+    }
+
+    function closeExamples() {
+        if (isExamplesOpen) {
+            $('.examples').fadeOut('fast');
+            isExamplesOpen = false;
+        }
+    }
+
+    function openPrims() {
+        if (!isPrimsOpen) {
+            $('.prims').fadeIn('fast');
+            isPrimsOpen = true;
+        }
+    }
+
+    function closePrims() {
+        if (isPrimsOpen) {
+            $('.prims').fadeOut('fast');
+            $('#prims-err').html("");
+            isPrimsOpen = false;
+        }
+    }
+
+    function hideEntireActionsPanel() {
+        closeExamples();
+        closePrims();
+        hideActionsPanel();
+    }
+
+
+
+    // local
+    write(true, false);
+    var mw, gw, randomGraphID;
+
+    $(function() {
+        $('#play').hide();
+        mw = new MST();
+        gw = mw.getGraphWidget();
+        var options = [CP3_4_10, CP3_4_14, K5, RAIL, TESSELLATION];
+        mw.examples(options[Math.floor(Math.random()*5)]);
+        randomGraphID = -1;
+
+        var graphJSON = getQueryVariable("create");
+        if (graphJSON.length > 0) {
+            importjson(graphJSON);
+            window.history.pushState("object or string", "Title", window.location.href.split('?')[0]);
+        }
+
+        $('#draw').click(function() {
+            closeExamples();
+            closePrims();
+        });
+
+        $('#random').click(function() {
+            closeExamples();
+            closePrims();
+        });
+
+        $('#examples').click(function() {
+            openExamples();
+            closePrims();
+        })
+
+        $('#kruskals').click(function() {
+            closeExamples();
+            closePrims();
+        });
+
+        $('#prims').click(function() {
+            closeExamples();
+            openPrims();
+        });
+    });
+
+    function importjson(text) {
+        if (isPlaying) stop();
+        if (mode == "exploration") {
+            mw.importjson(text);
+            closeExamples();
+            isPlaying = false;
+        }
+    }
+
+    function drawGraph() {
+        if (isPlaying) stop();
+        if (mode == "exploration") {
+            $('#dark-overlay').fadeIn(function() {
+                $('#drawgraph').fadeIn();
+            });
+            mw.startLoop();
+            isPlaying = false;
+        }
+    }
+
+    function drawDone() {
+        if (!mw.draw()) return false;
+        mw.stopLoop();
+        $('#drawgraph').fadeOut();
+        $('#dark-overlay').fadeOut();
+    }
+
+    function drawCancel() {
+        mw.stopLoop();
+        $('#drawgraph').fadeOut();
+        $('#dark-overlay').fadeOut();
+    }
+
+    function example(id) {
+        if (isPlaying) stop();
+        setTimeout(function() {
+            if ((mode == "exploration") && mw.examples(id)) {
+                $('#progress-bar').slider("option", "max", 0);
+                closeExamples();
+                isPlaying = false;
+            }
+        }, 500);
+    }
+
+    function kruskals(callback) {
+        if (isPlaying) stop();
+        commonAction(mw.kruskal(callback), "Kruskal&#39;s Algorithm");
+    }
+
+    function prims() {
+        if (isPlaying) stop();
+        var input = parseInt($('#prim-v').val());
+        primsWithInput(input);
+    }
+
+    function primsWithInput(input, callback) {
+        commonAction(mw.prim(input, callback), "Prim&#39;s Algorithm, s = " + input);
+        setTimeout(function() { $('#prim-v').val(Math.floor(Math.random()*mw.getV())); }, 500); // randomized for next click between [0..V-1]
+    }
+
+    function loadGraph(graph) {
+        if (mw) {
+            mw.loadGraph(graph['vl'], graph['el']);
+        }
+    }
+
+    // Implement these functions in each visualisation
+    var userGraph = {
+        'vl': {},
+        'el': {},
+    };
+
+    // This function will be called before entering E-Lecture Mode
+    function ENTER_LECTURE_MODE() {
+        if (mw) userGraph = mw.getGraph();
+    }
+
+    // This function will be called before returning to Explore Mode
+    function ENTER_EXPLORE_MODE() {
+        loadGraph(userGraph);
+    }
+
+    // Lecture action functions
+    function CUSTOM_ACTION(action, data, mode) {
+        if (action == 'kruskal') {
+            hideSlide(function() {
+                kruskals(showSlide);
+            });
+        }
+        else if (action == 'prim') {
+            hideSlide(function() {
+                primsWithInput(data, showSlide);
+            });
+        }
+    }
+</script>
+</body>
+</html>
